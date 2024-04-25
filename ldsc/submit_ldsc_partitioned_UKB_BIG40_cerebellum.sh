@@ -67,6 +67,18 @@ cd ${out_dir}
 grep -e Category -e L2_1 *cerebellum*results | sort | uniq > ${out_dir}evol_annots_cerebellum.table
 
 #------------------------------------
+# to run as cell-type s-ldsc
+for p in ${rois2}
+ do
+ s_file=${working_dir}/${p}.sumstats.gz
+ # using h2-cts
+ #qsub ${analysis_dir}ldsc_h2cts_partitioned.sh ${p} ${s_file} ${ldscores_dir}baselineLD_v2.2/baselineLD. ${ldscores_dir2}/evol_annots_set1.ldcts ${out_dir}/ cerebellum_evol_annots
+ #qsub ${analysis_dir}ldsc_h2cts_partitioned.sh ${p} ${s_file} ${ldscores_dir}baselineLD_v2.2/baselineLD. ${ldscores_dir2}/evol_annots_adultHGEpfc.ldcts ${out_dir}/ cerebellum_evol_annots_HGEpfc
+ #qsub ${analysis_dir}ldsc_h2cts_partitioned.sh ${p} ${s_file} ${ldscores_dir}baselineLD_v2.2/baselineLD. ${ldscores_dir2}/evol_annots_fetalHGE.ldcts ${out_dir}/ cerebellum_evol_annots_fetalHGE
+done
+
+
+#------------------------------------
 
 #------------------------------------
 # move logs to folder

@@ -22,7 +22,7 @@ cd ${primary_dir}
 pheno_file=${ukb_dir}IDPs.csv
 dos2unix ${pheno_file}
 # define rois as cerebellum - parcellation
-rois=$(grep -e cerebellum -e Cerebellum ${ukb_dir}IDPs_summary.csv | grep -v -e intensity -e pheno | awk -F "," '{print $26}' | sed 's/"//g')
+rois=$(grep -e cerebellum -e Cerebellum ${ukb_dir}IDPs_summary.csv | grep -v -e intensity -e pheno | awk -F "," '{print $27}' | sed 's/"//g')
 #------------------------------------
 # run
 mkdir -p ${analysis_dir}sge
@@ -161,7 +161,7 @@ for p2 in ${rois}
  done
 
 #------------------------------------
-# Genetic correlations with disorders
+# Genetic correlations with disorders/other traits
 suffix=disorders_cog
 for base_pheno in ${rois}
  do
@@ -175,6 +175,19 @@ for base_pheno in ${rois}
   fi
  done
 
+# suffix=handedness
+# for base_pheno in ${rois}
+ # do
+  # if [ -f ${working_dir}${base_pheno}.sumstats.gz ]
+  # then
+  # if [ ! -f ${working_dir}/${base_pheno}_${suffix}_rg.log ] && [ ! -f ${working_dir}/logs/${base_pheno}_${suffix}_rg.log ]
+  # then
+   # echo Compute rg between ${base_pheno} and traits of interest using LDSC
+   # qsub -v phenos2test='LeftHandedness_CuellarPartida2020-AND-Ambidextrous_CuellarPartida2020',p1=${base_pheno},suffix=${suffix} ${analysis_dir}ldsc_rg_cognitive.sh
+  # fi
+  # fi
+ # done
+
 #------------------------------------
 # define sets of regions of interest (subcortical and selection of cortical) for rg
 #------------------------------------
@@ -184,7 +197,9 @@ p=$(echo $name | awk -F "_" '{print $1}') # parcellation
 m=$(echo $name | awk -F "_" '{print $2}') # measure
 m2=$(echo $m | tr '[:upper:]' '[:lower:]')
 ## phens2: list of language related cortical volumes (FAST parcellation)
-phens2=$( grep -v cerebell ${lat_file} | grep ${p} | grep -e ${m} -e ${m2} | awk '{print $4,$5,$6}' | sed 's/ /\n/g' | grep -v NA | sort | uniq )
+phens2=$( grep -v cerebell ${lat_file} | grep ${p} | grep -e ${m} -e ${m2} | \
+ grep -v -e thal -e stem -e stria -e caudate -e hippocampus -e pallidum -e putamen | \
+  awk '{print $4,$5,$6}' | sed 's/ /\n/g' | grep -v NA | sort | uniq )
 phens3=$( grep -e pallidum -e putamen -e striatum -e accumb -e caudate -e thalamus -e amygdala -e hippocampus -e brain_stem ${lat_file} | grep -e ${p} | grep ${m} | awk '{print $4,$5,$6}' | sed 's/ /\n/g' | grep -v NA | sort | uniq )
 # aseg
 name=aseg_VOLUME
@@ -194,26 +209,6 @@ m2=$(echo $m | tr '[:upper:]' '[:lower:]')
 phens4=$( grep -e Pallidum -e Putamen -e Striatum -e Accumb -e Caudate -e Thalamus -e Amygdala -e Hippocampus -e Brain-Stem ${lat_file} | \
  grep -e ${p} | grep -e ${m} -e ${m2} | awk '{print $4,$5,$6}' | sed 's/ /\n/g' | grep -v NA | sort | uniq )
 
-#------------------------------------
-# cortical language network
-#------------------------------------
-# Run pairwise genetic correlations with language related cortical volumes
-## for selected cerebellar phenotypes
-rois2=$( grep -e Cerebellum -e cerebellum ${ukb_dir}IDPs_summary.csv | grep -v -e intensity | grep -e crus_I -e crus_II -e _X -e '_VI"' -e Cortex -e White-Matter | awk -F "," '{print $26}' | sed 's/"//g' )
-rois2=$(echo Chambers2022_TotalCerebellarVolume $rois2)
-
-# genetic correlations with cortical volumes related to language
-for p2 in ${phens2}; do
- for p1 in ${rois}; do
-  if [ ! -f ${working_dir}${p1}_${p2}_rg.log ] && [ ! -f ${working_dir}/logs/${p1}_${p2}_rg.log ]
-   then
-   echo Run rg between: ${p1} ${p2}
-   qsub ${analysis_dir}ldsc_rg.sh ${p1} ${p2}
-  else
-   echo File already exists: ${p1}_${p2}_rg.log
-  fi
- done
-done
 
 #------------------------------------
 # subcortical volumes
@@ -233,6 +228,28 @@ for p2 in ${phens3} ${phens4}; do
 done
 
 #------------------------------------
+# cortical language network / whole cortical FAST
+#------------------------------------
+# Run pairwise genetic correlations with language related cortical volumes
+## for selected cerebellar phenotypes
+rois2=$( grep -e Cerebellum -e cerebellum ${ukb_dir}IDPs_summary.csv | grep -v -e intensity -e pheno | awk -F "," '{print $27}' | sed 's/"//g' )
+rois2=$(echo Chambers2022_TotalCerebellarVolume $rois2)
+
+# genetic correlations with cortical volumes related to language
+## + with rest of the HO atlas, for completeness + comply with reviewers
+for p2 in ${phens2}; do
+ for p1 in ${rois}; do
+  if [ ! -f ${working_dir}/${p1}_${p2}_rg.log ] && [ ! -f ${working_dir}/logs/${p1}_${p2}_rg.log ]
+   then # **to check: this is not working properly **
+   echo Run rg between: ${p1} ${p2}
+   qsub ${analysis_dir}ldsc_rg.sh ${p1} ${p2}
+   else
+   echo File already exists: ${p1}_${p2}_rg.log
+  fi 
+ done
+done
+
+#------------------------------------
 # create summary tables - for all phenos
 #------------------------------------
 # move logs to folder
@@ -243,7 +260,6 @@ mv ${working_dir}*log ${working_dir}/logs/
 # double check log files that were wrong
 #------------------------------------
 cd ${working_dir}/logs/
-
 
 #------------------------------------
 ## h2 estimates
@@ -269,7 +285,10 @@ grep -A11 p2 *rg.log | grep -v -e LR -e cognitive -e disorders | grep -v Analysi
 grep -v -e 'log-$' -e 'time elapsed' -e '.py' -e '_sumstats' -e 'ps.sumstats' -e 'NA' > summary_rg_ldsc.table
 grep -A11 p2 *disorders_rg.log | grep -v Analysis | grep -e p2 -e sumstats | grep -v -e 'log-$' -e 'time elapsed' > summary_disorders_rg_ldsc.table
 grep -A11 p2 *disorders_cog_rg.log | grep -v Analysis | grep -e p2 -e sumstats | grep -v -e 'log-$' -e 'time elapsed' > summary_disorders_cog_rg_ldsc.table
-#
+
+#grep -A11 p2 *cognitive_rg.log | grep -v Analysis | grep -e p2 -e sumstats | grep -v -e 'log-$' -e 'time elapsed' > summary_cognitive_rg_ldsc.table
+#grep -A11 p2 *handedness_rg.log | grep -v Analysis | grep -e p2 -e sumstats | grep -v -e 'log-$' -e 'time elapsed' > summary_handedness_rg_ldsc.table
+#grep -A11 p2 *readingGenLang_rg.log | grep -v Analysis | grep -e p2 -e sumstats | grep -v -e 'log-$' -e 'time elapsed' > summary_readingGenLang_rg_ldsc.table
 mkdir -p ${working_dir}/output/
 mv ${working_dir}logs/*table ${working_dir}/output/
 ## format summary and convert tables to csv

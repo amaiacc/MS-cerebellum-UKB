@@ -132,7 +132,7 @@ ntests<-19
 #----------------------------------------------------------------------
 # read 
 ## phenotype information
-idps<-read.csv(paste(primary_dir,"IDPs_summary.csv",sep=""),header=TRUE) %>% filter(!is.na(Cerebellum))
+idps<-read.csv(paste(primary_dir,"IDPs_summary.csv",sep=""),header=TRUE) %>% filter(!is.na(Cerebellum)|!is.na(Cerebellum2))
 
 # define order of regions:
 cer_regions<-c("TOTAL","CORTEX","WHITE-MATTER",
@@ -161,10 +161,11 @@ rm(rg_cort1,rg_cort3)
 w1<-grep("CEREBELL",toupper(rg_cort$region.p1))
 w2<-grep("CEREBELL",toupper(rg_cort$region.p2),invert=TRUE)
 w0<-intersect(w1,w2) # both
-w3<-grep("ACCUM|HIPPO|CAUDATE|STEM|AMYG|PALLID|THALAMUS|STRIATUM|PUTAMEN|PLANUM_TEMP|ANGULAR_G",toupper(rg_cort$region.p2),invert=TRUE)
+w3<-grep("ACCUM|HIPPO|CAUDATE|STEM|AMYG|PALLID|THALAMUS|STRIATUM|PUTAMEN",toupper(rg_cort$region.p2),invert=TRUE)
 w0<-intersect(w0,w3)
 rg_cort<-rg_cort[w0,]
-rm(w1,w2,w0)
+
+rm(w1,w2,w3,w0)
 
 # edit some columns
 rg_cort <- rg_cort %>% 
@@ -182,23 +183,28 @@ rg_cort<-rg_cort %>% mutate(
   region.cortical=gsub("Gyrus","\nGyrus",region.cortical) %>% gsub("Cortex","\nCortex",.) 
   )
 
-
 # define order of cortical measures, by lobe...
 order_cortical<-sort(unique(rg_cort$region.cortical))
-order_cortical<-order_cortical[c(1:2, # IFG
-                                 10:11, # SUPRAMARGINAL
-                                 7, # PRECUNEUS
-                                 8:9, # STG
-                                 3:5, # MTG
-                                 12:14,6 # Fusif. Gyrus, Temp and Occ
-)]
+# order_cortical<-order_cortical[c(1:2, # IFG
+#                                  10:11, # SUPRAMARGINAL
+#                                  7, # PRECUNEUS
+#                                  8:9, # STG
+#                                  3:5, # MTG
+#                                  12:14,6 # Fusif. Gyrus, Temp and Occ
+# )]
 
 # define sig after multiple testing correction
 rg_cort <- rg_cort %>%
-  mutate(sig=if_else(p<(0.05/(ntests*length(order_cortical))),"*",""))
-
+  mutate(sig=if_else(p<(0.05/(ntests*length(order_cortical)*2)),"*",""),
+         Pbnf=p.adjust(p,method="bonferroni"))
 
 rg_cort<-rg_cort %>% mutate(region.cortical=factor(region.cortical,levels=order_cortical))
+# remove empty columns, to clear table
+na_counts<-apply(rg_cort,2,function(x) sum(!is.na(x)))
+empty_cols<-names(which(na_counts<NROW(idps)))
+
+rg_cort<- rg_cort %>% dplyr::select(-all_of(empty_cols))
+
 # save files
 write.csv(rg_cort,file=paste(out_dir,"/ldsc_rg_cortical","_",root,"_",project,".csv",sep=""),row.names = FALSE)
 
@@ -229,7 +235,7 @@ target_labels<- ggseg(atlas="hoCort")$data %>% select(label) %>% distinct() %>%
          )
 
 rg_cort<-rg_cort %>% mutate(hemi.p2=gsub("L","lh",hemisphere.p2) %>% gsub("R","rh",.)) %>%
-  mutate(matchLabel=paste(hemi.p2,region.p2,sep="_") %>% 
+  mutate(matchLabel=paste(hemi,region,sep="_") %>% 
            gsub("area_|thick_|smri_|cort.","",.) %>% 
            gsub(paste0("FAST","_"),"",.) %>%
            gsub("\\.|-","_",.) %>% tolower() %>%
@@ -237,21 +243,40 @@ rg_cort<-rg_cort %>% mutate(hemi.p2=gsub("L","lh",hemisphere.p2) %>% gsub("R","r
            gsub("temp_","temporal_",.) %>%
            gsub("front_","frontal_",.) %>%
            gsub("inf_","inferior_",.) %>%
+           gsub("_inf$","_inferior",.) %>%
            gsub("sup_","superior_",.) %>%
+           gsub("_sup$","_superior",.) %>%
            gsub("mid_","middle_",.) %>%
+           gsub("_med_","_medial_",.) %>%
            gsub("_ant","_anterior",.) %>%
            gsub("_post","_posterior",.) %>%
+           gsub("cent_","central_",.) %>%
            gsub("pars","pars_",.) %>%
            gsub("tri$","triangularis",.) %>%
            gsub("op$","opercularis",.) %>%
            gsub("orb$","orbitalis",.) %>%
+           # gsub("operc","opercular",.) %>%
+           gsub("parietal_operc","parietal_operculum",.) %>%
+           gsub("frontal_operc","frontal_operculum",.) %>%
+           gsub("central_operc","central_opercular",.) %>%
+           gsub("heschl_gyrus","heschl_s_gyrus_includes_h1_and_h2_",.) %>%
            gsub("fusif_","fusiform_",.) %>%
+           gsub("cing","cingulate",.) %>%
+           gsub("orb","orbital",.) %>%
+           gsub("intracalc","intracalcarine",.) %>%
            gsub("supramarg_","supramarginal_",.) %>%
+           gsub("supracalc","supracalcarine",.) %>%
            gsub("precun_","precuneous_",.) %>%
-           gsub("tempocc","temporooccipital",.)
-        )
+           gsub("tempocc","temporooccipital",.) %>%
+           gsub("latoccipital","lateral_occipital",.) %>%
+           gsub("juxtapos_lobule_cortex","juxtapositional_lobule_cortex_formerly_supplementary_motor_cortex_",.) %>%
+           gsub("parahipp","parahippocampal",.) %>%
+           gsub("posteriorcentral","postcentral",.)
+  )
 # add color label
-rg_cort_colors<-rg_cort %>% dplyr::select(region.cortical) %>% distinct() %>%
+rg_cort_colors<-rg_cort %>% dplyr::select(region.cortical) %>% distinct() 
+
+rg_cort_colors<- rg_cort_colors %>%
   mutate(color=
            met.brewer(name="Signac",n=length(unique(rg_cort_colors$region.cortical)))
   )
@@ -287,9 +312,8 @@ rg_cort_network2<-rg_cort_network + theme(legend.position="left") +
   facet_grid(hemi~.) +
   guides(fill=guide_legend(ncol=1,title="",override.aes = list(color="white")))
 
-rg_cort_network %>% ggsave(file=paste0(out_dir,"../atlas_figures/HarvardOxford_vols_langNetwork.png"),height=6,width=8)
-
-rg_cort_network2 %>%  ggsave(file=paste0(out_dir,"../atlas_figures/HarvardOxford_vols_langNetwork_2.png"),height=4,width=10)
+rg_cort_network %>% ggsave(file=paste0(out_dir,"../atlas_figures/HarvardOxford_vols_FASTcort.png"),height=6,width=8)
+rg_cort_network2 %>%  ggsave(file=paste0(out_dir,"../atlas_figures/HarvardOxford_vols_FASTcort_2.png"),height=4,width=10)
 
 #----------------------------------------------------------------------
 #' ## Results
